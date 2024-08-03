@@ -9,3 +9,4 @@ edition = "2021"
 
 [dependencies]
 hooser-derive = { path = "hooser-derive" }
+toml = "0.8.19"
