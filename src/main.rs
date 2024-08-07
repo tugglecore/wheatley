@@ -1,14 +1,23 @@
 use hooser_derive::Hooser;
 
 #[derive(Hooser)]
-pub enum Poets {
-    Lucille
+pub enum Cars {
+    Civic,
+    Corolla,
+    Elantra,
+    Sentra,
 }
 
 fn main() {
-    let lucille = Poets::Lucille;
-    let bio = lucille.bio();
+    let civic = Cars::Civic;
+    let bio = civic.bio();
     println!("{bio}");
-    
-    println!("Hello, world!");
+
+    let nissan = Cars::Sentra;
+    let bio = nissan.bio();
+    println!("{bio}");
+
+    let corolla = Cars::Corolla;
+    let bio = corolla.bio();
+    println!("{bio}");
 }
