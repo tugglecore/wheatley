@@ -11,13 +11,9 @@ pub enum Cars {
 fn main() {
     let civic = Cars::Civic;
     let bio = civic.bio();
-    println!("{bio}");
+    println!("When was the first civic produced? {bio}");
 
-    let nissan = Cars::Sentra;
-    let bio = nissan.bio();
-    println!("{bio}");
-
-    let corolla = Cars::Corolla;
-    let bio = corolla.bio();
-    println!("{bio}");
+    let elantra = Cars::Elantra;
+    let maker = elantra.automaker();
+    println!("Who makes Elantra? {maker}");
 }
