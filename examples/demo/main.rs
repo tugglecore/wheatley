@@ -1,4 +1,4 @@
-use hooser_derive::Hooser;
+use wheatley::Hooser;
 
 #[derive(Hooser)]
 pub enum Cars {

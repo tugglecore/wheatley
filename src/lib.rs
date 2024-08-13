@@ -11,34 +11,18 @@ use toml::Table;
 #[proc_macro_derive(Hooser)]
 pub fn hooser(tokens: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(tokens as DeriveInput);
+
+    let output = match ast.data {
+        syn::Data::Enum(_) => write_enum_impl(ast),
+        _ => unimplemented!("Only implemented enum items")
+    };
+
+    output.into()
+}
+
+fn write_enum_impl(ast: DeriveInput) -> proc_macro2::TokenStream {
     let target = ast.ident.clone();
-
-    let mut static_assets_path = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
-    let mut identifier = ast.ident.clone().to_string();
-    identifier.make_ascii_lowercase();
-    static_assets_path.push(identifier);
-
-    // Map file names to file content
-
-    let mut asset_register: HashMap<String, toml::Table> = HashMap::new();
-
-    for entry in fs::read_dir(&static_assets_path).unwrap() {
-        let entry = entry.unwrap();
-        let unstructured_data = fs::read_to_string(entry.path()).unwrap();
-        let asset = unstructured_data.parse::<Table>().unwrap();
-
-        asset_register.insert(
-            entry
-                .path()
-                .file_name()
-                .and_then(|file_name| Path::new(file_name).file_stem())
-                .and_then(std::ffi::OsStr::to_str)
-                .map(|file_stem| file_stem.to_snake_case())
-                .unwrap(),
-            asset,
-        );
-    }
-
+    let asset_register = gather_assets(ast.clone());
     // Map variant names to variant data
 
     let mut variant_register = HashMap::new();
@@ -103,5 +87,39 @@ pub fn hooser(tokens: TokenStream) -> TokenStream {
         }
     };
 
-    output.into()
+    output
+}
+
+fn gather_assets(ast: DeriveInput) -> HashMap<String, toml::Table> {
+    let mut static_assets_path = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
+    let mut identifier = ast.ident.clone().to_string();
+    identifier.make_ascii_lowercase();
+    static_assets_path.push(identifier);
+
+    println!("{static_assets_path:#?}");
+
+    // Map file names to file content
+
+    let mut asset_register: HashMap<String, toml::Table> = HashMap::new();
+
+    // TODO: During development read the file from disk
+    // while building in production read embed the data
+    for entry in fs::read_dir(&static_assets_path).unwrap() {
+        let entry = entry.unwrap();
+        let unstructured_data = fs::read_to_string(entry.path()).unwrap();
+        let asset = unstructured_data.parse::<Table>().unwrap();
+
+        asset_register.insert(
+            entry
+                .path()
+                .file_name()
+                .and_then(|file_name| Path::new(file_name).file_stem())
+                .and_then(std::ffi::OsStr::to_str)
+                .map(|file_stem| file_stem.to_snake_case())
+                .unwrap(),
+            asset,
+        );
+    }
+
+    asset_register
 }

@@ -1,12 +1,18 @@
 [package]
-name = "hooser"
+name = "wheatley"
 version = "0.1.0"
 edition = "2021"
+description = "Embed static, structured assets into your program"
+keywords = ["assets", "embed", "dir", "include", "static", "file", "folder", "asset"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[workspaces]
+[lib]
+proc-macro = true
 
 [dependencies]
-hooser-derive = { path = "hooser-derive" }
+heck = "0.5.0"
+proc-macro2 = "1.0.86"
+quote = "1.0.36"
+syn = { version = "2.0.72", features = ["extra-traits"] }
 toml = "0.8.19"
