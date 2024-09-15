@@ -1,125 +1,42 @@
-use heck::ToSnakeCase;
-use proc_macro::TokenStream;
-use quote::quote;
-use std::collections::HashMap;
-use std::fs;
-use std::path::Path;
-use std::path::PathBuf;
-use syn::{parse_macro_input, DeriveInput};
-use toml::Table;
+mod mphf;
+use std::hash::Hash;
 
-#[proc_macro_derive(Hooser)]
-pub fn hooser(tokens: TokenStream) -> TokenStream {
-    let ast = parse_macro_input!(tokens as DeriveInput);
+pub use mphf::bitvector::BitVector;
+pub use wheatley_macro::*;
 
-    let output = match ast.data {
-        syn::Data::Enum(_) => write_enum_impl(ast),
-        _ => unimplemented!("Only implemented enum items")
-    };
-
-    output.into()
+pub struct File<'a> {
+    pub path: &'a [u8],
+    pub contents: &'a [u8],
 }
 
-fn write_enum_impl(ast: DeriveInput) -> proc_macro2::TokenStream {
-    let target = ast.ident.clone();
-    let asset_register = gather_assets(ast.clone());
-    // Map variant names to variant data
-
-    let mut variant_register = HashMap::new();
-
-    let syn::Data::Enum(target_enum) = ast.data else {
-        panic!("Can only derive an Enum")
-    };
-
-    for variant in target_enum.variants.iter() {
-        variant_register.insert(variant.ident.to_string().to_snake_case(), variant.clone());
+impl<'a> File<'a> {
+    pub const fn new(path: &'a [u8], contents: &'a [u8]) -> Self {
+        File { path, contents }
     }
-
-    // TODO: Confirm there is a 1 to 1 mapping
-    // between files and variants and there is
-    // no non-matching item in either set
-
-    // TODO: Confirm all files have the same schema
-
-    let properties = asset_register
-        .values()
-        .next()
-        .map(|fc| {
-            fc.keys()
-                .map(std::clone::Clone::clone)
-                .collect::<Vec<String>>()
-        })
-        .unwrap();
-
-    let mut fragments = vec![];
-
-    for property in properties {
-        let mut variant_matchers = vec![];
-
-        for (variant_name, variant) in variant_register.iter() {
-            let file_contents = asset_register.get(variant_name).unwrap();
-            let asset = file_contents.get(&property).unwrap().as_str().unwrap();
-            let v = &variant.ident;
-            let i = &target;
-            let variant_matcher = quote! {
-                #i::#v => #asset
-            };
-
-            variant_matchers.push(variant_matcher);
-        }
-
-        let property = quote::format_ident!("{}", property);
-
-        let property_method = quote! {
-            fn #property (&self) -> &'static str {
-                match self {
-                    #(#variant_matchers),*
-                }
-            }
-        };
-
-        fragments.push(property_method);
-    }
-
-    let output = quote! {
-        impl #target {
-            #(#fragments)*
-        }
-    };
-
-    output
 }
 
-fn gather_assets(ast: DeriveInput) -> HashMap<String, toml::Table> {
-    let mut static_assets_path = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
-    let mut identifier = ast.ident.clone().to_string();
-    identifier.make_ascii_lowercase();
-    static_assets_path.push(identifier);
+pub enum Entry<'a> {
+    File(File<'a>),
+}
 
-    println!("{static_assets_path:#?}");
+pub struct Wheatley<'a> {
+    entries: &'a [Entry<'a>],
+    mphf: mphf::bbhash::Mphf<'a>,
+}
 
-    // Map file names to file content
+impl<'a> Wheatley<'a> {
+    pub const fn new(entries: &'a [Entry], mphf_state: &'a [(BitVector<'a>, &'a [u64])]) -> Self {
+        let mphf = mphf::bbhash::Mphf::new(mphf_state);
 
-    let mut asset_register: HashMap<String, toml::Table> = HashMap::new();
-
-    // TODO: During development read the file from disk
-    // while building in production read embed the data
-    for entry in fs::read_dir(&static_assets_path).unwrap() {
-        let entry = entry.unwrap();
-        let unstructured_data = fs::read_to_string(entry.path()).unwrap();
-        let asset = unstructured_data.parse::<Table>().unwrap();
-
-        asset_register.insert(
-            entry
-                .path()
-                .file_name()
-                .and_then(|file_name| Path::new(file_name).file_stem())
-                .and_then(std::ffi::OsStr::to_str)
-                .map(|file_stem| file_stem.to_snake_case())
-                .unwrap(),
-            asset,
-        );
+        Self { mphf, entries }
     }
 
-    asset_register
+    pub fn get<T: Hash + core::fmt::Debug>(&self, key: T) -> &File {
+        let entry_position = self.mphf.hash(&key) as usize;
+        let entry = &self.entries[entry_position];
+
+        match entry {
+            Entry::File(file) => file,
+        }
+    }
 }
