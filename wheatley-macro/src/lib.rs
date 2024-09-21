@@ -15,6 +15,15 @@ struct Config {
     location: String,
 }
 
+#[derive(Debug)]
+struct Con {
+    location: PathBuf,
+    prepend_slash: bool,
+    should_compress_assets: bool,
+    compression_algorithm: Option<String>,
+    compression_unit: Option<String>,
+}
+
 #[proc_macro_derive(Hooser, attributes(wheatley))]
 pub fn hooser(tokens: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(tokens as DeriveInput);
@@ -29,7 +38,113 @@ pub fn hooser(tokens: TokenStream) -> TokenStream {
 
 #[proc_macro]
 pub fn embed_assets(token_stream: TokenStream) -> TokenStream {
-    let token_index = make_token_index(token_stream.clone());
+    let config = build_config(token_stream.clone());
+
+    let mut asset_register = gather(&config.location);
+
+    let assets = asset_register.drain().collect::<Vec<(PathBuf, Vec<u8>)>>();
+
+    let (hasher, hash_table) = build_hash_table(assets);
+
+    tokenize_hash_components(hasher, hash_table)
+}
+
+fn build_hash_table(
+    mut assets: Vec<(PathBuf, Vec<u8>)>,
+) -> (mphf::bbhash::Mphf<String>, Vec<(PathBuf, Vec<u8>)>) {
+    let file_paths = assets
+        .iter()
+        .map(|(p, _)| p.to_string_lossy().into_owned())
+        .collect::<Vec<String>>();
+
+    let bbhas = mphf::bbhash::Mphf::new(1.7, &file_paths);
+
+    for current_asset_position in 0..assets.len() {
+        loop {
+            let (file_path, _) = &assets[current_asset_position];
+            let hash_position = bbhas.hash(&file_path.to_string_lossy().into_owned()) as usize;
+
+            if current_asset_position == hash_position {
+                break;
+            }
+
+            assets.swap(hash_position, current_asset_position);
+        }
+    }
+
+    (bbhas, assets)
+}
+
+fn tokenize_hash_components(
+    hasher: mphf::bbhash::Mphf<String>,
+    hash_table: Vec<(PathBuf, Vec<u8>)>,
+) -> TokenStream {
+    let entries = hash_table.iter().map(|(key, value)| {
+        let path = key.to_str().unwrap().as_bytes();
+        let contents = value.as_slice();
+        quote! {
+            wheatley::Entry::File(
+                wheatley::File::new(
+                    &[ #(#path),* ],
+                    &[ #(#contents),* ]
+                )
+            )
+        }
+    });
+
+    let bit_vectors = hasher
+        .bitvecs
+        .into_iter()
+        .map(|(bit_vector, bits)| {
+            let bits = bits.into_iter().map(|num| num);
+
+            quote! {
+                (
+                    wheatley::BitVector::from_embedded_state(#bit_vector),
+                     &[ #(#bits),* ]
+                )
+            }
+        })
+        .collect::<Vec<proc_macro2::TokenStream>>();
+
+    quote! {
+        wheatley::Wheatley::new(
+            &[ #(#entries),* ],
+            &[ #(#bit_vectors),* ]
+        )
+    }
+    .into()
+}
+
+fn gather(location: &PathBuf) -> HashMap<PathBuf, Vec<u8>> {
+    let mut asset_register = HashMap::new();
+    let mut dirs = std::collections::VecDeque::from([location.clone()]);
+
+    while let Some(dir) = dirs.pop_front() {
+        for entry in std::fs::read_dir(dir).unwrap() {
+            let entry = entry.unwrap();
+            let file_type = entry.file_type().unwrap();
+
+            if file_type.is_symlink() {
+                panic!("Symlinks are not supported");
+            }
+
+            if file_type.is_dir() {
+                dirs.push_back(entry.path());
+                continue;
+            }
+
+            let asset_path = entry.path();
+            let asset = std::fs::read(&asset_path).unwrap();
+            asset_register.insert(entry.path(), asset);
+        }
+    }
+
+    asset_register
+}
+
+fn build_config(ast: TokenStream) -> Con {
+    let token_index = make_token_index(ast.clone());
 
     let compression_algorithm = token_index
         .get("compression_algorithm")
@@ -91,77 +206,13 @@ pub fn embed_assets(token_stream: TokenStream) -> TokenStream {
         })
         .collect::<std::path::PathBuf>();
 
-    let mut asset_register = HashMap::new();
-    let mut dirs = std::collections::VecDeque::from([location]);
-
-    while let Some(dir) = dirs.pop_front() {
-        for entry in std::fs::read_dir(dir).unwrap() {
-            let entry = entry.unwrap();
-            let file_type = entry.file_type().unwrap();
-
-            if file_type.is_symlink() {
-                panic!("Symlinks are not supported");
-            }
-
-            if file_type.is_dir() {
-                dirs.push_back(entry.path());
-                continue;
-            }
-
-            let asset_path = entry.path();
-            let asset = std::fs::read(&asset_path).unwrap();
-            asset_register.insert(entry.path(), asset);
-        }
+    Con {
+        location,
+        prepend_slash,
+        should_compress_assets,
+        compression_unit,
+        compression_algorithm,
     }
-
-    let file_paths = asset_register
-        .keys()
-        .map(|p| p.to_string_lossy().into_owned())
-        .collect::<Vec<String>>();
-
-    let bbhas = mphf::bbhash::Mphf::new(1.7, &file_paths);
-
-    let entries = asset_register.iter().map(|(key, value)| {
-        let path = key.to_str().unwrap().as_bytes();
-        let contents = value.as_slice();
-        quote! {
-            wheatley::Entry::File(
-                wheatley::File::new(
-                    &[ #(#path),* ],
-                    &[ #(#contents),* ]
-                )
-            )
-        }
-    });
-
-    let bit_vectors = bbhas
-        .bitvecs
-        .into_iter()
-        .map(|(bit_vector, bits)| {
-            let bits = bits.into_iter().map(|num| num);
-
-            quote! {
-                (
-                    wheatley::BitVector::from_embedded_state(#bit_vector),
-                     &[ #(#bits),* ]
-                )
-            }
-        })
-        .collect::<Vec<proc_macro2::TokenStream>>();
-
-    let w = quote! {
-        wheatley::Wheatley::new(
-            &[ #(#entries),* ],
-            &[ #(#bit_vectors),* ]
-        )
-    }
-    .into();
-
-    w
-}
-
-struct Poop {
-    number: i8,
 }
 
 fn make_token_index(ast: TokenStream) -> HashMap<String, proc_macro::TokenTree> {
@@ -333,4 +384,41 @@ fn gather_assets(ast: DeriveInput) -> HashMap<String, toml::Table> {
     }
 
     asset_register
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn create_assets(assets: &[(&str, &str)]) -> Vec<(PathBuf, Vec<u8>)> {
+        assets
+            .iter()
+            .map(|(p, c)| (PathBuf::from(*p), Vec::from(c.as_bytes())))
+            .collect::<Vec<(PathBuf, Vec<u8>)>>()
+    }
+
+
+    fn shuffle(mut buoy: Vec<(PathBuf, Vec<u8>)>) -> Vec<(PathBuf, Vec<u8>)> {
+        let size = buoy.len();
+        let halfway_point = size / 2;
+        for i in 0..halfway_point {
+            println!("check math {i:#?}");
+            buoy.swap(i, halfway_point - i)
+        }
+
+        buoy
+    }
+
+
+    #[test]
+    fn confirm_entries_sorted_by_hasher() {
+        let assets = create_assets(&[("foo", "bar"), ("qux", "baz"), ("zoo", "books")]);
+        let (_, expected_hash_table) = build_hash_table(assets.clone());
+        let remixed_assets = shuffle(expected_hash_table.clone());
+
+        let (_, hash_table_result) = build_hash_table(remixed_assets);
+
+        assert_eq!(expected_hash_table, hash_table_result);
+    }
+
 }
