@@ -1,3 +1,6 @@
+use flate2::read::GzDecoder;
+use std::io::prelude::*;
+
 static WHEATLEY: wheatley::Wheatley = wheatley::embed_assets! {
     location: "examples/books",
     compression_algorithm: "br",
@@ -13,6 +16,8 @@ fn main() {
     println!("Hello, my name is Sam I am");
 
     let file = WHEATLEY.get("examples\\books\\hardly_haunted.txt");
-    let file = std::str::from_utf8(file.contents).unwrap();
-    println!("Here we go: {file:#?}");
+    let mut d = GzDecoder::new(file.contents);
+    let mut s = String::new();
+    d.read_to_string(&mut s).unwrap();
+    println!("Here we go: {s:#?}");
 }

@@ -27,24 +27,11 @@ pub mod bbhash {
     // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
     // THE SOFTWARE.
 
-    // #[cfg(feature = "parallel")]
-    // use rayon::prelude::*;
-
-    // pub mod hashmap;
-    // #[cfg(feature = "parallel")]
-    // mod par_iter;
-
     use crate::mphf::bitvector::BitVector;
-    // use log::error;
-    use std::borrow::Borrow;
+
     use std::fmt::Debug;
     use std::hash::Hash;
     use std::hash::Hasher;
-    use std::marker::PhantomData;
-    // #[cfg(feature = "parallel")]
-    // use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-    // #[cfg(feature = "parallel")]
-    // use std::sync::{Arc, Mutex};
 
     fn fold(v: u64) -> u32 {
         ((v & 0xFFFFFFFF) as u32) ^ ((v >> 32) as u32)
@@ -83,8 +70,6 @@ pub mod bbhash {
         // phantom: PhantomData<T>,
         bit_vectors_with_ranks: &'a [(BitVector<'a>, &'a [u64])],
     }
-
-    const MAX_ITERS: u64 = 100;
 
     impl<'a> Mphf<'a> {
         /// Generate a minimal perfect hash function for the set of `objects`.
@@ -204,59 +189,6 @@ pub mod bbhash {
         }
     }
 
-    // #[cfg(feature = "parallel")]
-    // impl<T: Hash + Debug + Sync + Send> Mphf<T> {
-    //     /// Same as `new`, but parallelizes work on the rayon default Rayon threadpool.
-    //     /// Configure the number of threads on that threadpool to control CPU usage.
-    //     #[cfg(feature = "parallel")]
-    //     pub fn new_parallel(gamma: f64, objects: &[T], starting_seed: Option<u64>) -> Mphf<T> {
-    //         assert!(gamma > 1.01);
-    //         let mut bitvecs = Vec::new();
-    //         let mut iter = 0;
-    //
-    //         let cx = Context::new(
-    //             std::cmp::max(255, (gamma * objects.len() as f64) as u64),
-    //             starting_seed.unwrap_or(0) + iter,
-    //         );
-    //
-    //         objects.into_par_iter().for_each(|v| cx.find_collisions(v));
-    //         let mut redo_keys = objects
-    //             .into_par_iter()
-    //             .filter_map(|v| cx.filter(v))
-    //             .collect::<Vec<_>>();
-    //
-    //         bitvecs.push(cx.a);
-    //         iter += 1;
-    //
-    //         while !redo_keys.is_empty() {
-    //             let cx = Context::new(
-    //                 std::cmp::max(255, (gamma * redo_keys.len() as f64) as u64),
-    //                 starting_seed.unwrap_or(0) + iter,
-    //             );
-    //
-    //             (&redo_keys)
-    //                 .into_par_iter()
-    //                 .for_each(|&v| cx.find_collisions(v));
-    //             redo_keys = (&redo_keys)
-    //                 .into_par_iter()
-    //                 .filter_map(|&v| cx.filter(v))
-    //                 .collect();
-    //
-    //             bitvecs.push(cx.a);
-    //             iter += 1;
-    //             if iter > MAX_ITERS {
-    //                 println!("ran out of key space. items: {:?}", redo_keys);
-    //                 panic!("counldn't find unique hashes");
-    //             }
-    //         }
-    //
-    //         Mphf {
-    //             bitvecs: Self::compute_ranks(bitvecs),
-    //             phantom: PhantomData,
-    //         }
-    //     }
-    // }
-
     // struct Context<'a> {
     //     size: u64,
     //     seed: u64,
@@ -274,42 +206,6 @@ pub mod bbhash {
     //         }
     //     }
     //
-    //     // #[cfg(feature = "parallel")]
-    //     // fn find_collisions<T: Hash>(&self, v: &T) {
-    //     //     let idx = hashmod(self.seed, v, self.size);
-    //     //     if !self.collide.contains(idx) && !self.a.insert(idx) {
-    //     //         self.collide.insert(idx);
-    //     //     }
-    //     // }
-    //     //
-    //     fn find_collisions_sync<T: Hash>(&mut self, v: &T) {
-    //         let idx = hashmod(self.seed, v, self.size);
-    //         if !self.collide.contains(idx) && !self.a.insert_sync(idx) {
-    //             self.collide.insert_sync(idx);
-    //         }
-    //     }
-    //     //
-    //     // #[cfg(feature = "parallel")]
-    //     // fn filter<'t, T: Hash>(&self, v: &'t T) -> Option<&'t T> {
-    //     //     let idx = hashmod(self.seed, v, self.size);
-    //     //     if self.collide.contains(idx) {
-    //     //         self.a.remove(idx);
-    //     //         Some(v)
-    //     //     } else {
-    //     //         None
-    //     //     }
-    //     // }
-    //     //
-    //     #[cfg(not(feature = "parallel"))]
-    //     fn filter<'t, T: Hash>(&mut self, v: &'t T) -> Option<&'t T> {
-    //         let idx = hashmod(self.seed, v, self.size);
-    //         if self.collide.contains(idx) {
-    //             self.a.remove(idx);
-    //             Some(v)
-    //         } else {
-    //             None
-    //         }
-    //     }
     // }
 
     // #[cfg(test)]
@@ -348,32 +244,6 @@ pub mod bbhash {
     //         hashes == gt
     //     }
     //
-    //     /// Check that a Minimal perfect hash function (MPHF) is generated for the set xs
-    //     // #[cfg(feature = "parallel")]
-    //     // fn check_mphf_parallel<T>(xsv: &[T]) -> bool
-    //     // where
-    //     //     T: Sync + Hash + PartialEq + Eq + Debug + Send,
-    //     // {
-    //     //     // Generate the MPHF
-    //     //     let phf = Mphf::new_parallel(1.7, xsv, None);
-    //     //
-    //     //     // Hash all the elements of xs
-    //     //     let mut hashes: Vec<u64> = xsv.iter().map(|v| phf.hash(v)).collect();
-    //     //
-    //     //     hashes.sort_unstable();
-    //     //
-    //     //     // Hashes must equal 0 .. n
-    //     //     let gt: Vec<u64> = (0..xsv.len() as u64).collect();
-    //     //     hashes == gt
-    //     // }
-    //     //
-    //     // #[cfg(not(feature = "parallel"))]
-    //     // fn check_mphf_parallel<T>(_xsv: &[T]) -> bool
-    //     // where
-    //     //     T: Hash + PartialEq + Eq + Debug,
-    //     // {
-    //     //     true
-    //     // }
     //
     //     fn check_chunked_mphf<T>(values: Vec<Vec<T>>, total: u64) -> bool
     //     where
@@ -393,52 +263,6 @@ pub mod bbhash {
     //         let gt: Vec<u64> = (0..total as u64).collect();
     //         hashes == gt
     //     }
-    //
-    //     // #[cfg(feature = "parallel")]
-    //     // fn check_chunked_mphf_parallel<T>(values: Vec<Vec<T>>, total: u64) -> bool
-    //     // where
-    //     //     T: Sync + Hash + PartialEq + Eq + Debug + Send,
-    //     // {
-    //     //     let phf = Mphf::from_chunked_iterator_parallel(1.7, &values, None, total, 2);
-    //     //
-    //     //     // Hash all the elements of xs
-    //     //     let mut hashes: Vec<u64> = values
-    //     //         .iter()
-    //     //         .flat_map(|x| x.iter().map(|v| phf.hash(&v)))
-    //     //         .collect();
-    //     //
-    //     //     hashes.sort_unstable();
-    //     //
-    //     //     // Hashes must equal 0 .. n
-    //     //     let gt: Vec<u64> = (0..total as u64).collect();
-    //     //     hashes == gt
-    //     // }
-    //
-    //     // #[cfg(not(feature = "parallel"))]
-    //     // fn check_chunked_mphf_parallel<T>(_values: Vec<Vec<T>>, _total: u64) -> bool
-    //     // where
-    //     //     T: Sync + Hash + PartialEq + Eq + Debug + Send,
-    //     // {
-    //     //     true
-    //     // }
-    //
-    //     // // this does not work under WASI.
-    //     // #[test]
-    //     // #[cfg(feature = "parallel")]
-    //     // fn check_crossbeam_scope() {
-    //     //     crossbeam_utils::thread::scope(|scope| {
-    //     //         let mut handles = vec![];
-    //     //         for i in 0..2 {
-    //     //             let h = scope.spawn(move |_| i * i);
-    //     //             handles.push(h);
-    //     //         }
-    //     //
-    //     //         for (i, h) in handles.into_iter().enumerate() {
-    //     //             assert_eq!(i * i, h.join().unwrap());
-    //     //         }
-    //     //     })
-    //     //     .unwrap()
-    //     // }
     //
     //     quickcheck! {
     //         fn check_int_slices(v: HashSet<u64>, lens: Vec<usize>) -> bool {
@@ -563,115 +387,15 @@ pub mod bitvector {
     // it will have a `capacity() % 64` bit memory waste.
     //
 
-    use std::fmt;
-    #[cfg(feature = "parallel")]
-    use std::sync::atomic::{AtomicU64, Ordering};
-
-    #[cfg(feature = "serde")]
-    use serde::{self, Deserialize, Serialize};
-
-    #[cfg(feature = "parallel")]
-    type Word = AtomicU64;
-
-    #[cfg(not(feature = "parallel"))]
     type Word = u64;
 
     /// Bitvector
     #[derive(Debug)]
-    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub struct BitVector<'a> {
         bits: u64,
-        #[cfg(feature = "parallel")]
-        #[cfg_attr(
-            feature = "serde",
-            serde(serialize_with = "ser_atomic_vec", deserialize_with = "de_atomic_vec")
-        )]
-        vector: Box<[AtomicU64]>,
 
-        #[cfg(not(feature = "parallel"))]
         vector: &'a [u64],
     }
-
-    // Custom serializer
-    #[cfg(all(feature = "serde", feature = "parallel"))]
-    fn ser_atomic_vec<S>(v: &[AtomicU64], serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        use serde::ser::SerializeSeq;
-        let mut seq = serializer.serialize_seq(Some(v.len()))?;
-        for x in v {
-            seq.serialize_element(&x.load(Ordering::SeqCst))?;
-        }
-        seq.end()
-    }
-
-    // Custom deserializer
-    #[cfg(all(feature = "serde", feature = "parallel"))]
-    pub fn de_atomic_vec<'de, D>(deserializer: D) -> Result<Box<[AtomicU64]>, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        struct AtomicU64SeqVisitor;
-
-        impl<'de> serde::de::Visitor<'de> for AtomicU64SeqVisitor {
-            type Value = Box<[AtomicU64]>;
-
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("a 64bit unsigned integer")
-            }
-
-            fn visit_seq<S>(self, mut access: S) -> Result<Self::Value, S::Error>
-            where
-                S: serde::de::SeqAccess<'de>,
-            {
-                let mut vec = Vec::<AtomicU64>::with_capacity(access.size_hint().unwrap_or(0));
-
-                while let Some(x) = access.next_element()? {
-                    vec.push(AtomicU64::new(x));
-                }
-                Ok(vec.into_boxed_slice())
-            }
-        }
-        let x = AtomicU64SeqVisitor;
-        deserializer.deserialize_seq(x)
-    }
-
-    // impl core::clone::Clone for BitVector {
-    //     fn clone(&self) -> Self {
-    //         Self {
-    //             bits: self.bits,
-    //             #[cfg(feature = "parallel")]
-    //             vector: self
-    //                 .vector
-    //                 .iter()
-    //                 .map(|x| AtomicU64::new(x.load(Ordering::SeqCst)))
-    //                 .collect(),
-    //             #[cfg(not(feature = "parallel"))]
-    //             vector: self.vector.clone(),
-    //         }
-    //     }
-    // }
-    //
-    // impl fmt::Display for BitVector {
-    //     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    //         write!(f, "[")?;
-    //         write!(
-    //             f,
-    //             "{}",
-    //             self.iter()
-    //                 .fold(String::new(), |x0, x| x0 + &format!("{}, ", x))
-    //         )?;
-    //         write!(f, "]")?;
-    //         Ok(())
-    //     }
-    // }
-    //
-    // impl PartialEq for BitVector {
-    //     fn eq(&self, other: &BitVector) -> bool {
-    //         self.eq_left(other, self.bits)
-    //     }
-    // }
 
     impl<'a> BitVector<'a> {
         /// Build a new empty bitvector
@@ -721,20 +445,12 @@ pub mod bitvector {
         /// This method is averagely faster than `self.len() > 0`.
         #[allow(dead_code)]
         pub fn is_empty(&self) -> bool {
-            #[cfg(feature = "parallel")]
-            return self.vector.iter().all(|x| x.load(Ordering::Relaxed) == 0);
-
-            #[cfg(not(feature = "parallel"))]
             return self.vector.iter().all(|x| *x == 0);
         }
 
         /// the number of elements in set
         pub fn len(&self) -> u64 {
             self.vector.iter().fold(0u64, |x0, x| {
-                #[cfg(feature = "parallel")]
-                return x0 + x.load(Ordering::Relaxed).count_ones() as u64;
-
-                #[cfg(not(feature = "parallel"))]
                 return x0 + x.count_ones() as u64;
             })
         }
@@ -775,10 +491,6 @@ pub mod bitvector {
                 .zip(other.vector.iter())
                 .take(word as usize)
                 .all(|(s1, s2)| {
-                    #[cfg(feature = "parallel")]
-                    return s1.load(Ordering::Relaxed) == s2.load(Ordering::Relaxed);
-
-                    #[cfg(not(feature = "parallel"))]
                     return s1 == s2;
                 })
                 && (self.get_word(word as usize) << (63 - offset))
@@ -791,24 +503,6 @@ pub mod bitvector {
         /// if value already exists in set, return false.
         ///
         /// Insert, remove and contains do not do bound check.
-        #[cfg(feature = "parallel")]
-        pub fn insert(&self, bit: u64) -> bool {
-            let (word, mask) = word_mask(bit);
-            let data = &self.vector[word];
-
-            let prev = data.fetch_or(mask, Ordering::Relaxed);
-            prev & mask == 0
-        }
-
-        // #[cfg(not(feature = "parallel"))]
-        // pub fn insert(&mut self, bit: u64) -> bool {
-        //     let (word, mask) = word_mask(bit);
-        //     let data = &mut self.vector[word];
-        //
-        //     let prev = *data;
-        //     *data = *data | mask;
-        //     prev & mask == 0
-        // }
 
         /// insert a new element synchronously.
         /// requires &mut self, but doesn't use
@@ -820,17 +514,6 @@ pub mod bitvector {
         ///
         /// Insert, remove and contains do not do bound check.
         // #[inline]
-        // pub fn insert_sync(&mut self, bit: u64) -> bool {
-        //     let (word, mask) = word_mask(bit);
-        //     #[cfg(feature = "parallel")]
-        //     let data = self.vector[word].get_mut();
-        //     #[cfg(not(feature = "parallel"))]
-        //     let data = &mut self.vector[word];
-        //
-        //     let old_data = *data;
-        //     *data |= mask;
-        //     old_data & mask == 0
-        // }
 
         /// remove an element from set
         ///
@@ -838,63 +521,11 @@ pub mod bitvector {
         /// if value doesn't exist in set, return false.
         ///
         /// Insert, remove and contains do not do bound check.
-        #[cfg(feature = "parallel")]
-        pub fn remove(&self, bit: u64) -> bool {
-            let (word, mask) = word_mask(bit);
-            let data = &self.vector[word];
-
-            let prev = data.fetch_and(!mask, Ordering::Relaxed);
-            prev & mask != 0
-        }
-
-        // #[cfg(not(feature = "parallel"))]
-        // pub fn remove(&mut self, bit: u64) -> bool {
-        //     let (word, mask) = word_mask(bit);
-        //     let data = &mut self.vector[word];
-        //
-        //     let prev = *data;
-        //     *data = *data & !mask;
-        //     prev & mask != 0
-        // }
 
         /// import elements from another bitvector
         ///
         /// If any new value is inserted, return true,
         /// else return false.
-        #[allow(dead_code)]
-        #[cfg(feature = "parallel")]
-        pub fn insert_all(&self, all: &BitVector) -> bool {
-            assert!(self.vector.len() == all.vector.len());
-            let mut changed = false;
-
-            for (i, j) in self.vector.iter().zip(all.vector.iter()) {
-                let prev = i.fetch_or(j.load(Ordering::Relaxed), Ordering::Relaxed);
-
-                if prev != i.load(Ordering::Relaxed) {
-                    changed = true;
-                }
-            }
-
-            changed
-        }
-
-        // #[allow(dead_code)]
-        // #[cfg(not(feature = "parallel"))]
-        // pub fn insert_all(&mut self, all: &BitVector) -> bool {
-        //     assert!(self.vector.len() == all.vector.len());
-        //     let mut changed = false;
-        //
-        //     for (i, j) in self.vector.iter_mut().zip(all.vector.iter()) {
-        //         let prev = *i;
-        //         *i |= *j;
-        //
-        //         if prev != *i {
-        //             changed = true;
-        //         }
-        //     }
-        //
-        //     changed
-        // }
 
         /// the max number of elements can be inserted into set
         pub fn capacity(&self) -> u64 {
@@ -903,10 +534,6 @@ pub mod bitvector {
 
         #[inline]
         pub fn get_word(&self, word: usize) -> u64 {
-            #[cfg(feature = "parallel")]
-            return self.vector[word].load(Ordering::Relaxed) as u64;
-
-            #[cfg(not(feature = "parallel"))]
             return self.vector[word] as u64;
         }
 
@@ -941,9 +568,6 @@ pub mod bitvector {
             }
             while self.current == 0 {
                 self.current = if let Some(_i) = self.iter.next() {
-                    #[cfg(feature = "parallel")]
-                    let i = _i.load(Ordering::Relaxed);
-                    #[cfg(not(feature = "parallel"))]
                     let i = *_i;
                     if i == 0 {
                         self.idx += 64;

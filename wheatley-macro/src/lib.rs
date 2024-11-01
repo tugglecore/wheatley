@@ -1,5 +1,7 @@
+mod compression;
 mod mphf;
 
+use self::compression::compress_assets;
 use heck::ToSnakeCase;
 use proc_macro::TokenStream;
 use quote::quote;
@@ -44,8 +46,16 @@ pub fn embed_assets(token_stream: TokenStream) -> TokenStream {
 
     let assets = asset_register.drain().collect::<Vec<(PathBuf, Vec<u8>)>>();
 
-    let (hasher, hash_table) = build_hash_table(assets);
+    let (hasher, mut hash_table) = build_hash_table(assets);
 
+    if cfg!(any(
+        feature = "gzip",
+        feature = "br",
+        feature = "snap",
+        feature = "zstd",
+    )) {
+        compress_assets(&mut hash_table);
+    }
     tokenize_hash_components(hasher, hash_table)
 }
 
@@ -94,14 +104,15 @@ fn tokenize_hash_components(
 
     let bit_vectors = hasher
         .bitvecs
-        .into_iter()
+        .iter()
         .map(|(bit_vector, bits)| {
             let bits = bits.into_iter().map(|num| num);
 
             quote! {
+
                 (
                     wheatley::BitVector::from_embedded_state(#bit_vector),
-                     &[ #(#bits),* ]
+                    &[ #(#bits),* ]
                 )
             }
         })
@@ -109,8 +120,14 @@ fn tokenize_hash_components(
 
     quote! {
         wheatley::Wheatley::new(
-            &[ #(#entries),* ],
-            &[ #(#bit_vectors),* ]
+            {
+                static ENTRIES: &'static [wheatley::Entry] = &[ #(#entries),* ];
+                ENTRIES
+            },
+            {
+                static BIT_VECTORS: &'static [(wheatley::BitVector, &[u64])] = &[ #(#bit_vectors),* ];
+                BIT_VECTORS
+            }
         )
     }
     .into()
@@ -397,7 +414,6 @@ mod tests {
             .collect::<Vec<(PathBuf, Vec<u8>)>>()
     }
 
-
     fn shuffle(mut buoy: Vec<(PathBuf, Vec<u8>)>) -> Vec<(PathBuf, Vec<u8>)> {
         let size = buoy.len();
         let halfway_point = size / 2;
@@ -409,7 +425,6 @@ mod tests {
         buoy
     }
 
-
     #[test]
     fn confirm_entries_sorted_by_hasher() {
         let assets = create_assets(&[("foo", "bar"), ("qux", "baz"), ("zoo", "books")]);
@@ -420,5 +435,4 @@ mod tests {
 
         assert_eq!(expected_hash_table, hash_table_result);
     }
-
 }
