@@ -21,7 +21,6 @@ struct Config {
 struct Con {
     location: PathBuf,
     prepend_slash: bool,
-    compression_unit: Option<String>,
     use_windows_path_separator: bool,
 }
 
@@ -76,21 +75,6 @@ fn build_config(ast: TokenStream) -> Con {
         })
         .unwrap_or(false);
 
-    // got some && should do it: Done
-    // got none && should do it: Done
-    // got none && don't do it: Done
-    // got some && don't do it: Done
-    let compression_unit = token_index
-        .get("compression_unit")
-        .inspect(|_| {})
-        .map(|token| token.to_string().trim_matches('"').to_string())
-        .inspect(|unit| {
-            if !matches!(unit.as_str(), "file" | "directory") {
-                panic!("Compression unit can either be file or directory");
-            }
-        })
-        .or_else(|| Some("file".to_string()));
-
     let prepend_slash = token_index
         .get("prepend_slash")
         .map(|token| {
@@ -118,7 +102,6 @@ fn build_config(ast: TokenStream) -> Con {
     Con {
         location,
         prepend_slash,
-        compression_unit,
         use_windows_path_separator,
     }
 }
