@@ -62,7 +62,7 @@ pub mod bbhash {
             fastmod(h, n as u32) as u64
         } else {
             let h = hash_with_seed(iter, v);
-            h % (n as u64)
+            h % n
         }
     }
 
@@ -178,7 +178,7 @@ pub mod bbhash {
         pub fn hash(&self, item: &T) -> u64 {
             for i in 0..self.bitvecs.len() {
                 let (bv, _) = &self.bitvecs[i];
-                let hash = hashmod(i as u64, item, bv.capacity() as u64);
+                let hash = hashmod(i as u64, item, bv.capacity());
 
                 if bv.contains(hash) {
                     return self.get_rank(hash, i);
@@ -199,7 +199,7 @@ pub mod bbhash {
     impl Context {
         fn new(size: u64, seed: u64) -> Self {
             Self {
-                size: size as u64,
+                size,
                 seed,
                 a: BitVector::new(size),
                 collide: BitVector::new(size),
@@ -416,17 +416,10 @@ mod bitvector {
         pub vector: Box<[u64]>,
     }
 
-    // (0u64, [4, 5])
     impl quote::ToTokens for BitVector {
         fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
-            // let bits_token = proc_macro2::Literal::u64_suffixed(self.bits);
-            // let slice_token = self
-            //     .vector
-            //     .into_iter()
-            //     .map(|num| proc_macro2::TokenTree::Literal(proc_macro2::Literal::u64_suffixed(*num)));
-
             let bits = self.bits;
-            let vector = self.vector.iter().map(|num| num);
+            let vector = self.vector.iter();
             tokens.extend(quote::quote! {
                 (
                     #bits,
@@ -491,11 +484,11 @@ mod bitvector {
             let (word, offset) = word_offset(bits);
             let mut bvec: Vec<Word> = Vec::with_capacity((word + 1) as usize);
             for _ in 0..word {
-                bvec.push(u64::max_value().into());
+                bvec.push(u64::MAX);
             }
 
-            let last_val = u64::max_value() >> (64 - offset);
-            bvec.push(last_val.into());
+            let last_val = u64::MAX >> (64 - offset);
+            bvec.push(last_val);
             BitVector {
                 bits,
                 vector: bvec.into_boxed_slice(),
@@ -539,9 +532,7 @@ mod bitvector {
                 .iter()
                 .zip(other.vector.iter())
                 .take(word as usize)
-                .all(|(s1, s2)| {
-                    return s1 == s2;
-                })
+                .all(|(s1, s2)| s1 == s2)
                 && (self.get_word(word as usize) << (63 - offset))
                     == (other.get_word(word as usize) << (63 - offset))
         }
@@ -570,7 +561,7 @@ mod bitvector {
             let data = &mut self.vector[word];
 
             let prev = *data;
-            *data = *data & !mask;
+            *data &= !mask;
             prev & mask != 0
         }
 
@@ -581,7 +572,7 @@ mod bitvector {
 
         #[inline]
         pub fn get_word(&self, word: usize) -> u64 {
-            return self.vector[word] as u64;
+            self.vector[word]
         }
 
         pub fn num_words(&self) -> usize {

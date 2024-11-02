@@ -7,8 +7,8 @@ use proc_macro::TokenStream;
 use quote::quote;
 use std::collections::HashMap;
 use std::fs;
-use std::path::{Path, Component};
 use std::path::PathBuf;
+use std::path::{Component, Path};
 use syn::{parse_macro_input, DeriveInput};
 use toml::Table;
 
@@ -22,7 +22,7 @@ struct Con {
     location: PathBuf,
     prepend_slash: bool,
     compression_unit: Option<String>,
-    use_windows_path_separator: bool
+    use_windows_path_separator: bool,
 }
 
 #[proc_macro_derive(Hooser, attributes(wheatley))]
@@ -44,11 +44,10 @@ pub fn embed_assets(token_stream: TokenStream) -> TokenStream {
     let mut asset_register = gather(
         &config.location,
         config.prepend_slash,
-        config.use_windows_path_separator
+        config.use_windows_path_separator,
     );
 
     let assets = asset_register.drain().collect::<Vec<(PathBuf, Vec<u8>)>>();
-
 
     let (hasher, mut hash_table) = build_hash_table(assets);
 
@@ -83,17 +82,14 @@ fn build_config(ast: TokenStream) -> Con {
     // got some && don't do it: Done
     let compression_unit = token_index
         .get("compression_unit")
-        .inspect(|_| {
-        })
+        .inspect(|_| {})
         .map(|token| token.to_string().trim_matches('"').to_string())
         .inspect(|unit| {
             if !matches!(unit.as_str(), "file" | "directory") {
                 panic!("Compression unit can either be file or directory");
             }
         })
-        .or_else(|| {
-                Some("file".to_string())
-        });
+        .or_else(|| Some("file".to_string()));
 
     let prepend_slash = token_index
         .get("prepend_slash")
@@ -127,9 +123,13 @@ fn build_config(ast: TokenStream) -> Con {
     }
 }
 
-fn gather(location: &PathBuf, prepend_slash: bool, use_windows_path_separator: bool) -> HashMap<PathBuf, Vec<u8>> {
+fn gather(
+    location: &Path,
+    prepend_slash: bool,
+    use_windows_path_separator: bool,
+) -> HashMap<PathBuf, Vec<u8>> {
     let mut asset_register = HashMap::new();
-    let mut dirs = std::collections::VecDeque::from([location.clone()]);
+    let mut dirs = std::collections::VecDeque::from([location.to_path_buf()]);
 
     while let Some(dir) = dirs.pop_front() {
         for entry in std::fs::read_dir(dir).unwrap() {
@@ -137,7 +137,7 @@ fn gather(location: &PathBuf, prepend_slash: bool, use_windows_path_separator: b
             let file_type = entry.file_type().unwrap();
 
             if file_type.is_file() {
-                let asset = std::fs::read(&entry.path()).unwrap();
+                let asset = std::fs::read(entry.path()).unwrap();
 
                 let mut path = if use_windows_path_separator && cfg!(windows) {
                     entry.path()
@@ -211,7 +211,7 @@ fn tokenize_hash_components(
         .bitvecs
         .iter()
         .map(|(bit_vector, bits)| {
-            let bits = bits.into_iter().map(|num| num);
+            let bits = bits.into_iter();
 
             quote! {
 
@@ -241,11 +241,9 @@ fn tokenize_hash_components(
 fn to_unix_path(windows_path: PathBuf) -> PathBuf {
     windows_path
         .components()
-        .filter_map(|c| {
-            match c {
-                Component::Normal(part) => part.to_str(),
-                _ => None
-            }
+        .filter_map(|c| match c {
+            Component::Normal(part) => part.to_str(),
+            _ => None,
         })
         .collect::<Vec<_>>()
         .join("/")
@@ -355,7 +353,7 @@ fn pick_attributes(ast: DeriveInput) -> Config {
                 return None;
             };
 
-            if meta_list.path.segments.first().unwrap().ident.to_string() != "wheatley" {
+            if meta_list.path.segments.first().unwrap().ident != "wheatley" {
                 return None;
             }
 

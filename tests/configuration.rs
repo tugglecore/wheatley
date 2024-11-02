@@ -11,7 +11,7 @@ fn read_fixture<T: AsRef<Path>>(filename: T) -> String {
 #[test]
 fn read_assets_from_location() {
     let expected_contents = read_fixture("hardly_haunted.txt");
-    
+
     let wheatley: wheatley::Wheatley = embed_assets! {
         location: "examples/books",
     };
@@ -26,7 +26,7 @@ fn read_assets_from_location() {
 #[test]
 fn read_loaction_given_as_windows_path() {
     let expected_contents = read_fixture("hardly_haunted.txt");
-    
+
     let wheatley: wheatley::Wheatley = embed_assets! {
         location: "examples\\books",
     };
@@ -41,7 +41,7 @@ fn read_loaction_given_as_windows_path() {
 #[test]
 fn prepend_slash() {
     let expected_contents = read_fixture("hardly_haunted.txt");
-    
+
     let wheatley: wheatley::Wheatley = embed_assets! {
         location: "examples/books",
         prepend_slash: true
@@ -55,9 +55,9 @@ fn prepend_slash() {
 }
 
 #[test]
-fn pre_slash_missing_without_option () {
+fn pre_slash_missing_without_option() {
     let expected_contents = read_fixture("hardly_haunted.txt");
-    
+
     let wheatley: wheatley::Wheatley = embed_assets! {
         location: "examples/books",
     };

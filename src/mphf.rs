@@ -59,7 +59,7 @@ pub mod bbhash {
             fastmod(h, n as u32) as u64
         } else {
             let h = hash_with_seed(iter, v);
-            h % (n as u64)
+            h % n
         }
     }
 
@@ -109,7 +109,7 @@ pub mod bbhash {
         pub fn hash<T: Hash + Debug>(&self, item: &T) -> u64 {
             for i in 0..self.bit_vectors_with_ranks.len() {
                 let (bv, _) = &self.bit_vectors_with_ranks[i];
-                let hash = hashmod(i as u64, item, bv.capacity() as u64);
+                let hash = hashmod(i as u64, item, bv.capacity());
 
                 if bv.contains(hash) {
                     return self.get_rank(hash, i);
@@ -381,9 +381,9 @@ pub mod bitvector {
 
         /// the number of elements in set
         pub fn len(&self) -> u64 {
-            self.vector.iter().fold(0u64, |x0, x| {
-                return x0 + x.count_ones() as u64;
-            })
+            self.vector
+                .iter()
+                .fold(0u64, |x0, x| x0 + x.count_ones() as u64)
         }
 
         /*
@@ -421,9 +421,7 @@ pub mod bitvector {
                 .iter()
                 .zip(other.vector.iter())
                 .take(word as usize)
-                .all(|(s1, s2)| {
-                    return s1 == s2;
-                })
+                .all(|(s1, s2)| s1 == s2)
                 && (self.get_word(word as usize) << (63 - offset))
                     == (other.get_word(word as usize) << (63 - offset))
         }
@@ -465,7 +463,7 @@ pub mod bitvector {
 
         #[inline]
         pub fn get_word(&self, word: usize) -> u64 {
-            return self.vector[word] as u64;
+            self.vector[word]
         }
 
         pub fn num_words(&self) -> usize {

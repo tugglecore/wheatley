@@ -94,10 +94,7 @@ fn br_compression_absent_without_feature_flag() {
     let mut result = vec![];
     let mut contents = std::io::Cursor::new(Vec::from(file.contents));
 
-    assert!(matches!(
-        brotli::BrotliDecompress(&mut contents, &mut result),
-        Err(_)
-    ))
+    assert!(brotli::BrotliDecompress(&mut contents, &mut result).is_err())
 }
 
 #[test]
@@ -113,7 +110,7 @@ fn gzip_compression_absent_without_feature_flag() {
     let mut decoder = flate2::read::GzDecoder::new(file.contents);
     let mut result = String::new();
 
-    assert!(matches!(decoder.read_to_string(&mut result), Err(_)));
+    assert!(decoder.read_to_string(&mut result).is_err());
 }
 
 #[test]
@@ -127,10 +124,9 @@ fn snap_compression_absent_without_feature_flag() {
 
     let mut result = vec![];
 
-    assert!(matches!(
-        snap::read::FrameDecoder::new(file.contents).read_to_end(&mut result),
-        Err(_)
-    ));
+    assert!(snap::read::FrameDecoder::new(file.contents)
+        .read_to_end(&mut result)
+        .is_err());
 }
 
 #[test]
@@ -142,5 +138,5 @@ fn zstd_compression_absent_without_feature_flag() {
 
     let contents = std::io::Cursor::new(Vec::from(file.contents));
 
-    assert!(matches!(zstd::decode_all(contents.clone()), Err(_)));
+    assert!(zstd::decode_all(contents.clone()).is_err());
 }

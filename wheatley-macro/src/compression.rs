@@ -58,7 +58,7 @@ pub fn get_compressor() -> Compressor {
     }
 }
 
-pub fn compress_assets(hash_table: &mut Vec<(PathBuf, Vec<u8>)>) {
+pub fn compress_assets(hash_table: &mut [(PathBuf, Vec<u8>)]) {
     let compressor = get_compressor();
 
     for (_, asset) in hash_table.iter_mut() {

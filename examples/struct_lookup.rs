@@ -1,6 +1,3 @@
-use flate2::read::GzDecoder;
-use std::io::prelude::*;
-
 static WHEATLEY: wheatley::Wheatley = wheatley::embed_assets! {
     location: "examples/books",
     file_check: [
