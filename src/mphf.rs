@@ -72,81 +72,12 @@ pub mod bbhash {
     }
 
     impl<'a> Mphf<'a> {
-        /// Generate a minimal perfect hash function for the set of `objects`.
-        /// `objects` must not contain any duplicate items.
-        /// `gamma` controls the tradeoff between the construction-time and run-time speed,
-        /// and the size of the datastructure representing the hash function. See the paper for details.
-        /// `max_iters` - None to never stop trying to find a perfect hash (safe if no duplicates).
-        // pub fn old_new(gamma: f64, objects: &[T]) -> Mphf<T> {
-        //     assert!(gamma > 1.01);
-        //     let mut bitvecs = Vec::new();
-        //     let mut iter = 0;
-        //
-        //     let mut cx = Context::new(
-        //         std::cmp::max(255, (gamma * objects.len() as f64) as u64),
-        //         iter,
-        //     );
-        //
-        //     objects.iter().for_each(|v| cx.find_collisions_sync(v));
-        //     let mut redo_keys = objects
-        //         .iter()
-        //         .filter_map(|v| cx.filter(v))
-        //         .collect::<Vec<_>>();
-        //
-        //     bitvecs.push(cx.a);
-        //     iter += 1;
-        //
-        //     while !redo_keys.is_empty() {
-        //         let mut cx = Context::new(
-        //             std::cmp::max(255, (gamma * redo_keys.len() as f64) as u64),
-        //             iter,
-        //         );
-        //
-        //         redo_keys.iter().for_each(|&v| cx.find_collisions_sync(v));
-        //         redo_keys = redo_keys.into_iter().filter_map(|v| cx.filter(v)).collect();
-        //
-        //         bitvecs.push(cx.a);
-        //         iter += 1;
-        //         if iter > MAX_ITERS {
-        //             // error!("ran out of key space. items: {:?}", redo_keys);
-        //             panic!("counldn't find unique hashes");
-        //         }
-        //     }
-        //
-        //     Mphf {
-        //         bitvecs: Self::compute_ranks(bitvecs),
-        //         phantom: PhantomData,
-        //     }
-        // }
-
         pub const fn new(bit_vectors_with_ranks: &'a [(BitVector<'a>, &'a [u64])]) -> Mphf {
             // Mphf { bitvecs: Box::new([]), phantom: PhantomData }
             Mphf {
                 bit_vectors_with_ranks,
             }
         }
-
-        // fn compute_ranks(bvs: Vec<BitVector>) -> Box<[(BitVector, Box<[u64]>)]> {
-        //     let mut ranks = Vec::new();
-        //     let mut pop = 0_u64;
-        //
-        //     for bv in bvs {
-        //         let mut rank: Vec<u64> = Vec::new();
-        //         for i in 0..bv.num_words() {
-        //             let v = bv.get_word(i);
-        //
-        //             if i % 8 == 0 {
-        //                 rank.push(pop)
-        //             }
-        //
-        //             pop += v.count_ones() as u64;
-        //         }
-        //
-        //         ranks.push((bv, rank.into_boxed_slice()))
-        //     }
-        //
-        //     ranks.into_boxed_slice()
-        // }
 
         fn get_rank(&self, hash: u64, i: usize) -> u64 {
             let idx = hash as usize;

@@ -7,7 +7,7 @@ use proc_macro::TokenStream;
 use quote::quote;
 use std::collections::HashMap;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, Component};
 use std::path::PathBuf;
 use syn::{parse_macro_input, DeriveInput};
 use toml::Table;
@@ -21,9 +21,8 @@ struct Config {
 struct Con {
     location: PathBuf,
     prepend_slash: bool,
-    should_compress_assets: bool,
-    compression_algorithm: Option<String>,
     compression_unit: Option<String>,
+    use_windows_path_separator: bool
 }
 
 #[proc_macro_derive(Hooser, attributes(wheatley))]
@@ -42,9 +41,14 @@ pub fn hooser(tokens: TokenStream) -> TokenStream {
 pub fn embed_assets(token_stream: TokenStream) -> TokenStream {
     let config = build_config(token_stream.clone());
 
-    let mut asset_register = gather(&config.location);
+    let mut asset_register = gather(
+        &config.location,
+        config.prepend_slash,
+        config.use_windows_path_separator
+    );
 
     let assets = asset_register.drain().collect::<Vec<(PathBuf, Vec<u8>)>>();
+
 
     let (hasher, mut hash_table) = build_hash_table(assets);
 
@@ -56,7 +60,108 @@ pub fn embed_assets(token_stream: TokenStream) -> TokenStream {
     )) {
         compress_assets(&mut hash_table);
     }
+
     tokenize_hash_components(hasher, hash_table)
+}
+
+fn build_config(ast: TokenStream) -> Con {
+    let token_index = make_token_index(ast.clone());
+
+    let use_windows_path_separator = token_index
+        .get("use_windows_path_separator")
+        .map(|token| {
+            token
+                .to_string()
+                .parse::<bool>()
+                .expect("Config value for use_windows_path_separator is a bool type")
+        })
+        .unwrap_or(false);
+
+    // got some && should do it: Done
+    // got none && should do it: Done
+    // got none && don't do it: Done
+    // got some && don't do it: Done
+    let compression_unit = token_index
+        .get("compression_unit")
+        .inspect(|_| {
+        })
+        .map(|token| token.to_string().trim_matches('"').to_string())
+        .inspect(|unit| {
+            if !matches!(unit.as_str(), "file" | "directory") {
+                panic!("Compression unit can either be file or directory");
+            }
+        })
+        .or_else(|| {
+                Some("file".to_string())
+        });
+
+    let prepend_slash = token_index
+        .get("prepend_slash")
+        .map(|token| {
+            token
+                .to_string()
+                .parse::<bool>()
+                .expect("Config value for prepend_slash is a bool type")
+        })
+        .unwrap_or(false);
+
+    let location = token_index
+        .get("location")
+        .map(|token| token.to_string().trim_matches('"').to_string())
+        .expect("Missing assets directory")
+        .split(std::path::is_separator)
+        .map(|component| {
+            if component.starts_with("$") {
+                std::env::var(component).unwrap()
+            } else {
+                component.to_string()
+            }
+        })
+        .collect::<std::path::PathBuf>();
+
+    Con {
+        location,
+        prepend_slash,
+        compression_unit,
+        use_windows_path_separator,
+    }
+}
+
+fn gather(location: &PathBuf, prepend_slash: bool, use_windows_path_separator: bool) -> HashMap<PathBuf, Vec<u8>> {
+    let mut asset_register = HashMap::new();
+    let mut dirs = std::collections::VecDeque::from([location.clone()]);
+
+    while let Some(dir) = dirs.pop_front() {
+        for entry in std::fs::read_dir(dir).unwrap() {
+            let entry = entry.unwrap();
+            let file_type = entry.file_type().unwrap();
+
+            if file_type.is_file() {
+                let asset = std::fs::read(&entry.path()).unwrap();
+
+                let mut path = if use_windows_path_separator && cfg!(windows) {
+                    entry.path()
+                } else {
+                    to_unix_path(entry.path())
+                };
+
+                if prepend_slash {
+                    path = Path::new("/").join(path);
+                }
+
+                asset_register.insert(path, asset);
+            } else if file_type.is_symlink() {
+                panic!(
+                    "Encountered Symlink at: {}. Symlinks are not supported.",
+                    entry.path().to_str().unwrap()
+                );
+            } else {
+                dirs.push_back(entry.path());
+            }
+        }
+    }
+
+    asset_register
 }
 
 fn build_hash_table(
@@ -133,103 +238,18 @@ fn tokenize_hash_components(
     .into()
 }
 
-fn gather(location: &PathBuf) -> HashMap<PathBuf, Vec<u8>> {
-    let mut asset_register = HashMap::new();
-    let mut dirs = std::collections::VecDeque::from([location.clone()]);
-
-    while let Some(dir) = dirs.pop_front() {
-        for entry in std::fs::read_dir(dir).unwrap() {
-            let entry = entry.unwrap();
-            let file_type = entry.file_type().unwrap();
-
-            if file_type.is_symlink() {
-                panic!("Symlinks are not supported");
-            }
-
-            if file_type.is_dir() {
-                dirs.push_back(entry.path());
-                continue;
-            }
-
-            let asset_path = entry.path();
-            let asset = std::fs::read(&asset_path).unwrap();
-            asset_register.insert(entry.path(), asset);
-        }
-    }
-
-    asset_register
-}
-
-fn build_config(ast: TokenStream) -> Con {
-    let token_index = make_token_index(ast.clone());
-
-    let compression_algorithm = token_index
-        .get("compression_algorithm")
-        .map(|token| token.to_string().trim_matches('"').to_string())
-        .inspect(|algo| {
-            if !matches!(algo.as_str(), "br" | "gzip" | "zstd" | "snap") {
-                panic!("Received unknown compression algorithm: {algo}")
-            }
-        });
-
-    let should_compress_assets = compression_algorithm.is_some();
-
-    // got some && should do it: Done
-    // got none && should do it: Done
-    // got none && don't do it: Done
-    // got some && don't do it: Done
-    let compression_unit = token_index
-        .get("compression_unit")
-        .inspect(|_| {
-            if !should_compress_assets {
-                panic!("Specify compression algorithm to compress assets");
+fn to_unix_path(windows_path: PathBuf) -> PathBuf {
+    windows_path
+        .components()
+        .filter_map(|c| {
+            match c {
+                Component::Normal(part) => part.to_str(),
+                _ => None
             }
         })
-        .map(|token| token.to_string().trim_matches('"').to_string())
-        .inspect(|unit| {
-            if !matches!(unit.as_str(), "file" | "directory") {
-                panic!("Compression unit can either be file or directory");
-            }
-        })
-        .or_else(|| {
-            if should_compress_assets {
-                Some("file".to_string())
-            } else {
-                None
-            }
-        });
-
-    let prepend_slash = token_index
-        .get("prepend_slash")
-        .map(|token| {
-            token
-                .to_string()
-                .parse::<bool>()
-                .expect("Config value for prepend_slash is a bool type")
-        })
-        .unwrap_or(false);
-
-    let location = token_index
-        .get("location")
-        .map(|token| token.to_string().trim_matches('"').to_string())
-        .expect("Missing assets directory")
-        .split(std::path::is_separator)
-        .map(|component| {
-            if component.starts_with("$") {
-                std::env::var(component).unwrap()
-            } else {
-                component.to_string()
-            }
-        })
-        .collect::<std::path::PathBuf>();
-
-    Con {
-        location,
-        prepend_slash,
-        should_compress_assets,
-        compression_unit,
-        compression_algorithm,
-    }
+        .collect::<Vec<_>>()
+        .join("/")
+        .into()
 }
 
 fn make_token_index(ast: TokenStream) -> HashMap<String, proc_macro::TokenTree> {
