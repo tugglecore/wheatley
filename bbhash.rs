@@ -236,7 +236,6 @@ impl<T: Hash + Debug> Mphf<T> {
 //             bitvecs.push(cx.a);
 //             iter += 1;
 //             if iter > MAX_ITERS {
-//                 println!("ran out of key space. items: {:?}", redo_keys);
 //                 panic!("counldn't find unique hashes");
 //             }
 //         }
@@ -273,6 +272,7 @@ impl Context {
     //     }
     // }
     //
+
     fn find_collisions_sync<T: Hash>(&mut self, v: &T) {
         let idx = hashmod(self.seed, v, self.size);
         if !self.collide.contains(idx) && !self.a.insert_sync(idx) {

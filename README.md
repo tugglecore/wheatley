@@ -73,6 +73,22 @@ Here is a personal antidote that will help illustrate use case. For my web serve
 There are several different options and feature flags to configure wheatley. Some options applies to both the enum variant approach and the Hash table while others are only applicable to one approach. 
 
 #### Common options
+**location**
+```
+type: String
+default: None
+```
+Location of assets. If unset, program will panic.
+
+
+**use_backslash_in_keys**
+```
+type: bool
+default: false
+```
+Applies only to Windows environment. Setting this option to `false` (default) allows Windows' developers to use a single forward slash `/` for the keys of assets.
+Setting this to true in a Windows environment, requires lookup keys to be given with a backward slash `\`.
+This option has no effect on the `location` option.
 
 #### Hash table options
 **prepend_slash**

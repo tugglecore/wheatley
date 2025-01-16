@@ -11,10 +11,12 @@ keywords = ["assets", "embed", "dir", "include", "static", "file", "folder", "as
 proc-macro = true
 
 [dependencies]
+assertables.workspace = true
 boomphf = "0.6.0"
 brotli = { version = "6.0.0", optional = true }
 cfg-if = "1.0.0"
 flate2 = { version = "1.0.34", optional = true }
+globset = "0.4.15"
 heck = "0.5.0"
 phf = { version = "0.11", features = ["macros"] }
 proc-macro2 = "1.0.86"
@@ -26,7 +28,10 @@ wyhash = "0.5.0"
 zstd = { version = "0.13.2", optional = true }
 
 [dev-dependencies]
+fake = "3.0.1"
 quickcheck = "1.0.3"
+tempfile = "3.14.0"
+test-case = "3.3.1"
 
 [features]
 br = ["dep:brotli"]

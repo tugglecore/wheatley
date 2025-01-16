@@ -1,14 +1,17 @@
 mod compression;
+mod configuration;
 mod mphf;
 
 use self::compression::compress_assets;
+use configuration::Con;
+use globset::{Glob, GlobSet, GlobSetBuilder};
 use heck::ToSnakeCase;
 use proc_macro::TokenStream;
 use quote::quote;
 use std::collections::HashMap;
-use std::fs;
 use std::path::PathBuf;
 use std::path::{Component, Path};
+use std::{fmt, fs};
 use syn::{parse_macro_input, DeriveInput};
 use toml::Table;
 
@@ -17,11 +20,48 @@ struct Config {
     location: String,
 }
 
-#[derive(Debug)]
-struct Con {
-    location: PathBuf,
-    prepend_slash: bool,
-    use_windows_path_separator: bool,
+#[derive(Default)]
+struct GlobGroup {
+    patterns: Vec<String>,
+    glob_set: GlobSet,
+}
+
+impl GlobGroup {
+    fn new(globs: &[String]) -> Self {
+        let mut glob_set = GlobSetBuilder::new();
+        let mut patterns = Vec::new();
+        for glob in globs {
+            patterns.push(glob.to_string());
+
+            glob_set.add(Glob::new(glob).unwrap());
+        }
+
+        let glob_set = glob_set.build().unwrap();
+
+        Self { patterns, glob_set }
+    }
+
+    fn is_match<P: AsRef<Path>>(&self, path: P) -> bool {
+        self.glob_set.is_match(path)
+    }
+
+    fn is_empty(&self) -> bool {
+        self.patterns.is_empty()
+    }
+}
+
+impl PartialEq for GlobGroup {
+    fn eq(&self, other: &Self) -> bool {
+        self.patterns == other.patterns
+    }
+}
+
+impl fmt::Debug for GlobGroup {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("GlobGroup")
+            .field("patterns", &self.patterns)
+            .finish()
+    }
 }
 
 #[proc_macro_derive(Hooser, attributes(wheatley))]
@@ -38,15 +78,11 @@ pub fn hooser(tokens: TokenStream) -> TokenStream {
 
 #[proc_macro]
 pub fn embed_assets(token_stream: TokenStream) -> TokenStream {
-    let config = build_config(token_stream.clone());
+    let config = configuration::build_config(token_stream.into());
 
-    let mut asset_register = gather(
-        &config.location,
-        config.prepend_slash,
-        config.use_windows_path_separator,
-    );
+    println!("I AM HERE BRO!!!");
 
-    let assets = asset_register.drain().collect::<Vec<(PathBuf, Vec<u8>)>>();
+    let assets = gather(&config).drain().collect::<Vec<(PathBuf, Vec<u8>)>>();
 
     let (hasher, mut hash_table) = build_hash_table(assets);
 
@@ -62,73 +98,62 @@ pub fn embed_assets(token_stream: TokenStream) -> TokenStream {
     tokenize_hash_components(hasher, hash_table)
 }
 
-fn build_config(ast: TokenStream) -> Con {
-    let token_index = make_token_index(ast.clone());
-
-    let use_windows_path_separator = token_index
-        .get("use_windows_path_separator")
-        .map(|token| {
-            token
-                .to_string()
-                .parse::<bool>()
-                .expect("Config value for use_windows_path_separator is a bool type")
-        })
-        .unwrap_or(false);
-
-    let prepend_slash = token_index
-        .get("prepend_slash")
-        .map(|token| {
-            token
-                .to_string()
-                .parse::<bool>()
-                .expect("Config value for prepend_slash is a bool type")
-        })
-        .unwrap_or(false);
-
-    let location = token_index
-        .get("location")
-        .map(|token| token.to_string().trim_matches('"').to_string())
-        .expect("Missing assets directory")
-        .split(std::path::is_separator)
-        .map(|component| {
-            if component.starts_with("$") {
-                std::env::var(component).unwrap()
-            } else {
-                component.to_string()
-            }
-        })
-        .collect::<std::path::PathBuf>();
-
-    Con {
+fn gather(config: &Con) -> HashMap<PathBuf, Vec<u8>> {
+    let Con {
         location,
         prepend_slash,
-        use_windows_path_separator,
-    }
-}
+        use_backslash_in_keys,
+        ..
+    } = config;
 
-fn gather(
-    location: &Path,
-    prepend_slash: bool,
-    use_windows_path_separator: bool,
-) -> HashMap<PathBuf, Vec<u8>> {
     let mut asset_register = HashMap::new();
     let mut dirs = std::collections::VecDeque::from([location.to_path_buf()]);
 
+    // let we_have_include_globs = !include_globs.is_empty();
+    // println!("Do we have include globs {we_have_include_globs:#?}");
     while let Some(dir) = dirs.pop_front() {
+        // println!(
+        //     "Does glob match path {:#?}: {:#?}",
+        //     dir,
+        //     include_globs.is_match(&dir)
+        // );
+
+        // if !include_globs.is_empty() && !include_globs.is_match(&dir) {
+        //     continue;
+        // }
+
         for entry in std::fs::read_dir(dir).unwrap() {
             let entry = entry.unwrap();
+            println!("Potential path: {:#?}", entry.path());
+            println!("Strip prefix: {:#?}", entry.path().strip_prefix(location));
+
+            let asset_relative_path = entry.path();
+
+            let asset_relative_path = asset_relative_path.strip_prefix(location).unwrap();
+
+            // if exclude_globs.is_match(asset_relative_path) || (we_have_include_globs && !include_globs.is_match(asset_relative_path)) {
+            //     println!("We continued for {asset_relative_path:#?}");
+            //         continue
+            // }
+
             let file_type = entry.file_type().unwrap();
+
+            let mut path = if cfg!(windows) && *use_backslash_in_keys {
+                let path = entry.path();
+
+                if path.to_string_lossy().contains("/") {
+                    split_path_with_separator(path, r"\")
+                } else {
+                    path
+                }
+            } else {
+                split_path_with_separator(entry.path(), "/")
+            };
 
             if file_type.is_file() {
                 let asset = std::fs::read(entry.path()).unwrap();
 
-                let mut path = if use_windows_path_separator && cfg!(windows) {
-                    entry.path()
-                } else {
-                    to_unix_path(entry.path())
-                };
-
-                if prepend_slash {
+                if *prepend_slash {
                     path = Path::new("/").join(path);
                 }
 
@@ -221,6 +246,17 @@ fn tokenize_hash_components(
     .into()
 }
 
+fn split_path_with_separator(path: PathBuf, separator: &str) -> PathBuf {
+    path.components()
+        .filter_map(|c| match c {
+            Component::Normal(part) => part.to_str(),
+            _ => None,
+        })
+        .collect::<Vec<_>>()
+        .join(separator)
+        .into()
+}
+
 fn to_unix_path(windows_path: PathBuf) -> PathBuf {
     windows_path
         .components()
@@ -231,29 +267,6 @@ fn to_unix_path(windows_path: PathBuf) -> PathBuf {
         .collect::<Vec<_>>()
         .join("/")
         .into()
-}
-
-fn make_token_index(ast: TokenStream) -> HashMap<String, proc_macro::TokenTree> {
-    let mut attribute_index = HashMap::new();
-
-    ast.into_iter()
-        .filter(|token| {
-            matches!(
-                token,
-                proc_macro::TokenTree::Group(_)
-                    | proc_macro::TokenTree::Literal(_)
-                    | proc_macro::TokenTree::Ident(_)
-            )
-        })
-        .collect::<Vec<proc_macro::TokenTree>>()
-        .chunks(2)
-        .for_each(|pair| {
-            if let [k, v] = pair {
-                attribute_index.insert(k.to_string(), v.clone());
-            }
-        });
-
-    attribute_index
 }
 
 fn write_enum_impl(ast: DeriveInput) -> proc_macro2::TokenStream {
@@ -327,7 +340,6 @@ fn write_enum_impl(ast: DeriveInput) -> proc_macro2::TokenStream {
 }
 
 fn pick_attributes(ast: DeriveInput) -> Config {
-    println!("AST of DeriveInpute: {ast:#?}");
     let mut attribute_index = HashMap::new();
     ast.attrs
         .into_iter()
@@ -360,8 +372,6 @@ fn pick_attributes(ast: DeriveInput) -> Config {
             }
         });
 
-    println!("Tokens given to Wheatley: {attribute_index:#?}");
-
     let location = attribute_index.get("location").cloned().unwrap_or_else(|| {
         let mut identifier = ast.ident.clone().to_string();
         identifier.make_ascii_lowercase();
@@ -381,7 +391,6 @@ fn gather_assets(ast: DeriveInput) -> HashMap<String, toml::Table> {
 
     let mut asset_register: HashMap<String, toml::Table> = HashMap::new();
 
-    println!("{assets_directory:#?}");
     // TODO: During development read the file from disk
     // while building in production read embed the data
     for entry in fs::read_dir(assets_directory).unwrap() {
@@ -407,6 +416,12 @@ fn gather_assets(ast: DeriveInput) -> HashMap<String, toml::Table> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use assertables::*;
+    use fake::faker::filesystem::en::FileName;
+    use fake::Fake;
+    use std::io::{LineWriter, Write};
+    use tempfile::NamedTempFile;
+    use test_case::test_case;
 
     fn create_assets(assets: &[(&str, &str)]) -> Vec<(PathBuf, Vec<u8>)> {
         assets
@@ -419,7 +434,6 @@ mod tests {
         let size = buoy.len();
         let halfway_point = size / 2;
         for i in 0..halfway_point {
-            println!("check math {i:#?}");
             buoy.swap(i, halfway_point - i)
         }
 
@@ -436,4 +450,55 @@ mod tests {
 
         assert_eq!(expected_hash_table, hash_table_result);
     }
+
+    fn write_lines_to_temp_file(lines: &[&str]) -> String {
+        let mut temp_file = NamedTempFile::with_prefix("something").unwrap();
+
+        for line in lines {
+            writeln!(temp_file, "{}", line).unwrap();
+        }
+
+        temp_file.path().to_string_lossy().into()
+    }
+
+    fn to_vec_of_strings(slices: &[&str]) -> Vec<String> {
+        slices.iter().map(|i| (*i).to_owned()).collect()
+    }
+
+    fn write_fake_directory(entries: &[&str]) -> String {
+        let location: String = FileName().fake();
+        let tmp_dir = tempfile::Builder::new()
+            .prefix(&location)
+            .tempdir_in("./")
+            .unwrap();
+
+        for entry in entries {
+            tempfile::Builder::new()
+                .prefix(entry)
+                .tempfile_in(&tmp_dir)
+                .unwrap();
+        }
+
+        tmp_dir.path().to_str().unwrap().into()
+    }
+
+    // #[test_case([], [], ["a", "b", "c"]; "wo")]
+    // fn somthing (
+    //     wheatley_ignore: Vec<&str>,
+    //     wheatley_manifest: Vec<&str>,
+    //     expected_files: Vec<&str>
+    // ) {
+    //     let config = configuration::Con {
+    //         location: "filter_fixtures",
+    //         wheatley_ignore,
+    //         wheatley_manifest,
+    //         ..Default::default()
+    //     };
+    //     let collected_files: Vec<String> = gather(config)
+    //         .keys()
+    //         .map(|k| k.to_string_lossy().into_owned())
+    //         .collect::<_>();
+    //
+    //     assert_eq!(collected_files, expected_files);
+    // }
 }

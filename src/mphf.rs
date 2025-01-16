@@ -106,38 +106,19 @@ pub mod bbhash {
         /// with items known to be in construction set. Use `try_hash` if you cannot
         /// guarantee that `item` was in the construction set. If `item` was not present
         /// in the construction set this function may panic.
-        pub fn hash<T: Hash + Debug>(&self, item: &T) -> u64 {
+        pub fn hash<T: Hash + Debug>(&self, item: &T) -> Option<u64> {
             for i in 0..self.bit_vectors_with_ranks.len() {
                 let (bv, _) = &self.bit_vectors_with_ranks[i];
                 let hash = hashmod(i as u64, item, bv.capacity());
 
                 if bv.contains(hash) {
-                    return self.get_rank(hash, i);
+                    return Some(self.get_rank(hash, i));
                 }
             }
 
-            unreachable!("must find a hash value");
+            None
         }
     }
-
-    // struct Context<'a> {
-    //     size: u64,
-    //     seed: u64,
-    //     a: BitVector<'a>,
-    //     collide: BitVector<'a>,
-    // }
-    //
-    // impl<'a> Context<'a> {
-    //     fn new(size: u64, seed: u64) -> Self {
-    //         Self {
-    //             size: size as u64,
-    //             seed,
-    //             a: BitVector::new(size),
-    //             collide: BitVector::new(size),
-    //         }
-    //     }
-    //
-    // }
 
     // #[cfg(test)]
     // mod tests {
@@ -329,44 +310,10 @@ pub mod bitvector {
     }
 
     impl<'a> BitVector<'a> {
-        /// Build a new empty bitvector
-        // pub fn new(bits: u64) -> Self {
-        //     let n = u64s(bits);
-        //     let mut v: Vec<Word> = Vec::with_capacity(n as usize);
-        //     for _ in 0..n {
-        //         v.push(Word::default());
-        //     }
-        //
-        //     BitVector {
-        //         bits,
-        //         vector: v.into_boxed_slice(),
-        //     }
-        // }
-
         pub const fn from_embedded_state(embedded_state: (u64, &'a [u64])) -> Self {
             let (bits, vector) = embedded_state;
             BitVector { bits, vector }
         }
-
-        /// new bitvector contains all elements
-        ///
-        /// If `bits % 64 > 0`, the last u64 is guaranteed not to
-        /// have any extra 1 bits.
-        #[allow(dead_code)]
-        // pub fn ones(bits: u64) -> Self {
-        //     let (word, offset) = word_offset(bits);
-        //     let mut bvec: Vec<Word> = Vec::with_capacity((word + 1) as usize);
-        //     for _ in 0..word {
-        //         bvec.push(u64::max_value().into());
-        //     }
-        //
-        //     let last_val = u64::max_value() >> (64 - offset);
-        //     bvec.push(last_val.into());
-        //     BitVector {
-        //         bits,
-        //         vector: bvec.into_boxed_slice(),
-        //     }
-        // }
 
         /// return if this set is empty
         ///
@@ -385,15 +332,6 @@ pub mod bitvector {
                 .iter()
                 .fold(0u64, |x0, x| x0 + x.count_ones() as u64)
         }
-
-        /*
-        /// Clear all elements from a bitvector
-        pub fn clear(&mut self) {
-            for p in &mut self.vector {
-                *p = 0;
-            }
-        }
-        */
 
         /// If `bit` belongs to set, return `true`, else return `false`.
         ///
