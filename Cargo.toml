@@ -7,6 +7,7 @@ keywords = ["assets", "embed", "dir", "include", "static", "file", "folder", "as
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [workspace]
+members = ["benchmark"]
 
 [workspace.dependencies]
 assertables = "9.5.0"

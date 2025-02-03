@@ -18,7 +18,7 @@ fn br_compression() {
     let wheatley: wheatley::Wheatley = embed_assets! {
         location: "examples/books",
     };
-    let file = wheatley.get("examples/books/hardly_haunted.txt").unwrap();
+    let file = wheatley.get("hardly_haunted.txt").unwrap();
 
     let mut result = vec![];
     let mut contents = std::io::Cursor::new(Vec::from(file.contents));
@@ -38,7 +38,7 @@ fn gzip_compression() {
         location: "examples/books",
     };
 
-    let file = wheatley.get("examples/books/hardly_haunted.txt").unwrap();
+    let file = wheatley.get("hardly_haunted.txt").unwrap();
 
     let mut decoder = flate2::read::GzDecoder::new(file.contents);
     let mut result = String::new();
@@ -55,7 +55,7 @@ fn zstd_compression() {
     let wheatley: wheatley::Wheatley = embed_assets! {
         location: "examples/books",
     };
-    let file = wheatley.get("examples/books/hardly_haunted.txt").unwrap();
+    let file = wheatley.get("hardly_haunted.txt").unwrap();
 
     let contents = std::io::Cursor::new(Vec::from(file.contents));
     let result = zstd::decode_all(contents).unwrap();
@@ -74,8 +74,7 @@ fn snap_compression() {
     let wheatley: wheatley::Wheatley = embed_assets! {
         location: "examples/books",
     };
-    println!("After macro");
-    let file = wheatley.get("examples/books/hardly_haunted.txt").unwrap();
+    let file = wheatley.get("hardly_haunted.txt").unwrap();
 
     let mut result = vec![];
     snap::read::FrameDecoder::new(file.contents)
@@ -91,7 +90,7 @@ fn br_compression_absent_without_feature_flag() {
     let wheatley: wheatley::Wheatley = embed_assets! {
         location: "examples/books",
     };
-    let file = wheatley.get("examples/books/hardly_haunted.txt").unwrap();
+    let file = wheatley.get("hardly_haunted.txt").unwrap();
 
     let mut result = vec![];
     let mut contents = std::io::Cursor::new(Vec::from(file.contents));
@@ -107,7 +106,7 @@ fn gzip_compression_absent_without_feature_flag() {
         location: "examples/books",
     };
 
-    let file = wheatley.get("examples/books/hardly_haunted.txt").unwrap();
+    let file = wheatley.get("hardly_haunted.txt").unwrap();
 
     let mut decoder = flate2::read::GzDecoder::new(file.contents);
     let mut result = String::new();
@@ -122,7 +121,7 @@ fn snap_compression_absent_without_feature_flag() {
     let wheatley: wheatley::Wheatley = embed_assets! {
         location: "examples/books",
     };
-    let file = wheatley.get("examples/books/hardly_haunted.txt").unwrap();
+    let file = wheatley.get("hardly_haunted.txt").unwrap();
 
     let mut result = vec![];
 
@@ -136,7 +135,7 @@ fn zstd_compression_absent_without_feature_flag() {
     let wheatley: wheatley::Wheatley = embed_assets! {
         location: "examples/books",
     };
-    let file = wheatley.get("examples/books/hardly_haunted.txt").unwrap();
+    let file = wheatley.get("hardly_haunted.txt").unwrap();
 
     let contents = std::io::Cursor::new(Vec::from(file.contents));
 

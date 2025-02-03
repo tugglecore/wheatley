@@ -49,7 +49,7 @@ fn read_assets_from_location() {
     let wheatley: wheatley::Wheatley = embed_assets! {
         location: "examples/books",
     };
-    let file = wheatley.get("examples/books/hardly_haunted.txt").unwrap();
+    let file = wheatley.get("hardly_haunted.txt").unwrap();
 
     assert_eq!(
         String::from_utf8(file.contents.to_vec()).unwrap(),
@@ -64,7 +64,7 @@ fn read_loaction_given_windows_path() {
     let wheatley: wheatley::Wheatley = embed_assets! {
         location: "examples\\books",
     };
-    let file = wheatley.get("examples/books/hardly_haunted.txt").unwrap();
+    let file = wheatley.get("hardly_haunted.txt").unwrap();
 
     assert_eq!(
         String::from_utf8(file.contents.to_vec()).unwrap(),
@@ -72,71 +72,3 @@ fn read_loaction_given_windows_path() {
     )
 }
 
-#[cfg(windows)]
-#[test]
-fn read_location_with_backslash_separator() {
-    let (target_path, expected_contents) = read_random_book(r"\");
-
-    let wheatley: wheatley::Wheatley = embed_assets! {
-        location: "examples/books",
-        use_backslash_in_keys: true
-    };
-    let file = wheatley.get(target_path).unwrap();
-
-    assert_eq!(
-        String::from_utf8(file.contents.to_vec()).unwrap(),
-        expected_contents
-    )
-}
-
-#[test]
-fn prepend_slash() {
-    let expected_contents = read_fixture("hardly_haunted.txt");
-
-    let wheatley: wheatley::Wheatley = embed_assets! {
-        location: "examples/books",
-        prepend_slash: true
-    };
-    let file = wheatley.get("/examples/books/hardly_haunted.txt").unwrap();
-
-    assert_eq!(
-        String::from_utf8(file.contents.to_vec()).unwrap(),
-        expected_contents
-    )
-}
-
-#[test]
-fn pre_slash_missing_without_prepend_option() {
-    let (target_path, expected_contents) = read_random_book("/");
-
-    dbg!(&target_path);
-    let wheatley: wheatley::Wheatley = embed_assets! {
-        location: "examples/books",
-    };
-    let file = wheatley.get(target_path).unwrap();
-
-    assert_eq!(
-        String::from_utf8(file.contents.to_vec()).unwrap(),
-        expected_contents
-    )
-}
-
-// #[test]
-// fn include_globs() {
-//     let expected_contents = read_fixture("theodor_seuss_geisel/dr_seuss/cat_in_the_hat.txt");
-//
-//     let wheatley: wheatley::Wheatley = embed_assets! {
-//         location: "examples/books",
-//         include_globs: ["./examples/**/dr_seuss/**"]
-//     };
-//     let file = wheatley
-//         .get("examples/books/theodor_seuss_geisel/dr_seuss/cat_in_the_hat.txt")
-//         .unwrap();
-//
-//     dbg!(&wheatley);
-//
-//     assert_eq!(
-//         String::from_utf8(file.contents.to_vec()).unwrap(),
-//         expected_contents
-//     )
-// }

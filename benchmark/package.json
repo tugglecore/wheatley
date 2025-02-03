@@ -1,0 +1,33 @@
+{
+  "name": "benchmark",
+  "version": "1.0.0",
+  "description": "https://www.pexels.com/\r https://unsplash.com/\r https://pixabay.com/",
+  "main": "index.js",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@kuma-ui/core": "^1.5.9",
+    "@unovis/react": "^1.5.0",
+    "@unovis/ts": "^1.5.0",
+    "browsertime": "^24.1.1",
+    "chart.js": "^4.4.7",
+    "lighthouse": "^12.3.0",
+    "next": "^15.1.6",
+    "react": "^19.0.0",
+    "react-chartjs-2": "^5.3.0",
+    "react-dom": "^19.0.0",
+    "victory": "^37.3.6"
+  },
+  "devDependencies": {
+    "@kuma-ui/next-plugin": "^1.3.3",
+    "@pandacss/dev": "^0.52.0",
+    "@types/node": "22.13.0",
+    "@types/react": "^18.3.18",
+    "typescript": "5.7.3"
+  }
+}

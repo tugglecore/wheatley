@@ -2,18 +2,25 @@ use super::GlobGroup;
 use std::collections::HashMap;
 use std::path::Component;
 use std::path::PathBuf;
-use syn::{parse2, ExprArray, LitStr};
+use syn::{
+    parse2, 
+    ExprArray, 
+    LitStr,
+    Expr::Lit,
+    Lit::Str
+};
+use proc_macro2::TokenStream;
 
 #[derive(Debug, Default)]
-pub struct Con {
+pub struct Config {
     pub location: PathBuf,
-    pub prepend_slash: bool,
+    pub prefix: String,
     pub use_backslash_in_keys: bool,
     pub ignore_globs: Vec<String>,
     pub asset_manifest: Vec<String>,
 }
 
-pub fn build_config(ast: proc_macro2::TokenStream) -> Con {
+pub fn build_config(ast: proc_macro2::TokenStream) -> Config {
     let token_index = make_token_index(ast.clone());
 
     let use_backslash_in_keys = token_index
@@ -26,113 +33,88 @@ pub fn build_config(ast: proc_macro2::TokenStream) -> Con {
         })
         .unwrap_or(false);
 
-    let prepend_slash = token_index
-        .get("prepend_slash")
+    let prefix = token_index
+        .get("prefix")
         .map(|token| {
             token
                 .to_string()
-                .parse::<bool>()
-                .expect("Config value for prepend_slash is a bool type")
-        })
-        .unwrap_or(false);
-
-    // let mut include_globs = HashSet::new();
-
-    let include_globs = token_index
-        .get("include_globs")
-        .map(|token_tree| {
-            let proc_macro2::TokenTree::Group(group) = token_tree else {
-                panic!("fixme")
-            };
-
-            group
-                .stream()
-                .into_iter()
-                .map(|item| parse2::<syn::LitStr>(item.into()).unwrap().value())
-                .collect::<Vec<String>>()
+                .parse::<String>()
+                .expect("Config value for prepend_slash is a string type")
         })
         .unwrap_or_default();
 
-    // let include_manifest = token_index
-    //     .get("include_manifest")
-    //     .map(|token| parse::<syn::LitStr>(token.clone().into()).unwrap().value())
-    //     .or(Some("include_manifest.txt".into()))
-    //     .map(|path| {
-    //         let path = Path::from(path);
-    //         let include_patterns = fs::read_to_string(path)
-    //             .unwrap()
-    //             .lines()
-    //             .
-    //     })
-    //     .map(PathBuf::from)
-    //     .expect("Missing assets directory");
 
-    // let mut include_builder = GlobSetBuilder::new();
-    //
-    // for glob in include_globs {
-    //     let glob = Glob::new(&glob).unwrap();
-    //     include_builder.add(glob);
-    // }
-    // let include_globs = include_builder.build().unwrap();
+    let ignore_globs = token_index.get("ignore_globs")
+        .map(|token_tree| proc_macro2::TokenStream::from(token_tree.clone()));
 
-    let include_globs = GlobGroup::new(&include_globs);
-    let exclude_globs = token_index
-        .get("exclude_globs")
-        .map(|token_tree| {
-            let proc_macro2::TokenTree::Group(group) = token_tree else {
-                panic!("fixme")
-            };
-
-            group
-                .stream()
-                .into_iter()
-                .map(|item| parse2::<syn::LitStr>(item.into()).unwrap().value())
-                .collect::<Vec<String>>()
-        })
-        .unwrap_or_default();
-
-    // let mut builder = GlobSetBuilder::new();
-    //
-    // for glob in exclude_globs {
-    //     let glob = Glob::new(&glob).unwrap();
-    //     builder.add(glob);
-    // }
-    // let exclude_globs = builder.build().unwrap();
-    let exclude_globs = GlobGroup::new(&exclude_globs);
-
-    // let ignore_globs = token_index
-    //     .get("ignore_globs")
-    //     .map(|token| {
-    //         parse2::<ExprArray>(token.clone().into())
-    //             .unwrap()
-    //             .elems
-    //             .iter()
-    //             .collect::<
-
-    let ignore_globs = if let Some(token) = token_index.get("ignore_globs") {
-        let token_stream = proc_macro2::TokenStream::from(token.clone());
-        if let Ok(list) = parse2::<ExprArray>(token_stream.clone()) {
-            list
-                .elems
-                .iter()
-                .map(|exp| {
-                    match exp {
-                        syn::Expr::Lit(literal)
-                            if matches!(literal.lit, syn::Lit::Str(_)) => {
-                                String::from("fsd")
+    let survey_as_glob_list = |token_stream: TokenStream| {
+        parse2::<ExprArray>(token_stream)
+            .ok()
+            .map(|expr_array| {
+                expr_array
+                    .elems
+                    .into_iter()
+                    .map(|e| {
+                        if let syn::Expr::Lit(literal) = e {
+                            if let Str(glob) = literal.lit {
+                                return glob.value()
                             }
-                        _ => { panic!("f") }
-                    }
+                        }
+                        panic!("asdf")
                 })
                 .collect::<Vec<String>>()
-        } else if let Ok(file_path) = parse2::<LitStr>(token_stream.clone()) {
-            vec![]
-        } else {
-            panic!("Failed to interpret ignore_globs value {token:#?}")
-        }
-    } else {
-        vec![]
+            })
     };
+
+    let survey_as_glob_file = |token_stream: TokenStream| {
+        parse2::<LitStr>(token_stream)
+            .ok()
+            .map(|lit_str| vec![lit_str.value()])
+    };
+
+    let ignore_globs = ignore_globs
+        .and_then(|token_stream| {
+            let transformations = [
+                survey_as_glob_list(token_stream.clone()),
+                survey_as_glob_file(token_stream.clone())
+            ]
+            .into_iter()
+            .filter(|t| t.is_some())
+            .collect::<Vec<_>>();
+
+            if transformations.len() != 1 { panic!("sfs") }
+
+            transformations
+                .first()
+                .unwrap()
+                .clone()
+        })
+        .unwrap_or_default();
+
+    // let ignore_globs = if let Some(token) = token_index.get("ignore_globs") {
+    //     let token_stream = proc_macro2::TokenStream::from(token.clone());
+    //     if let Ok(list) = parse2::<ExprArray>(token_stream.clone()) {
+    //         list
+    //             .elems
+    //             .iter()
+    //             .map(|exp| {
+    //                 match exp {
+    //                     syn::Expr::Lit(literal)
+    //                         if matches!(literal.lit, syn::Lit::Str(_)) => {
+    //                             String::from("fsd")
+    //                         }
+    //                     _ => { panic!("f") }
+    //                 }
+    //             })
+    //             .collect::<Vec<String>>()
+    //     } else if let Ok(file_path) = parse2::<LitStr>(token_stream.clone()) {
+    //         vec![]
+    //     } else {
+    //         panic!("Failed to interpret ignore_globs value {token:#?}")
+    //     }
+    // } else {
+    //     vec![]
+    // };
 
     let location = token_index
         .get("location")
@@ -153,11 +135,11 @@ pub fn build_config(ast: proc_macro2::TokenStream) -> Con {
         })
         .collect::<PathBuf>();
 
-    Con {
+    Config {
         location,
         ignore_globs,
         asset_manifest: vec![],
-        prepend_slash,
+        prefix,
         use_backslash_in_keys,
     }
 }
@@ -205,7 +187,7 @@ mod tests {
             location: #given_location
         };
 
-        let Con {
+        let Config {
             location: actual_location,
             ..
         } = build_config(ast);
